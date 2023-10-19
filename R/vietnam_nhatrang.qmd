@@ -679,3 +679,8 @@ mapsite <- map1 + map_overlay
 ggsave(mapsite, file = "../output/nhatrang_site.png", dpi = 300, width = 8, height = 6.5)
 mapsite
 ```
+
+```{r}
+1+1
+```
+
