@@ -4,4 +4,5 @@
 .Ruserdata
 data
 output
+.Rhistory
 *.Rproj
