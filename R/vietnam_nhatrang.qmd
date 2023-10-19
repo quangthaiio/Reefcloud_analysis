@@ -6,35 +6,34 @@ date-format: "DD/MM/YYYY"
 format: 
   html:
     ## Format
+    ## Table of contents
+    ## Numbering
+    ## Layout
+    ## Rendering
     theme: spacelab
     css: ../resources/ws_style.css
     html-math-method: mathjax
-    ## Table of contents
     toc: true
     toc-float: true
-    ## Numbering
     number-sections: true
     number-depth: 3
-    ## Layout
     fig-caption-location: "bottom"
     fig-align: "center"
-
+    ## Code
+    ## Execution
     fig-width: 4
     fig-height: 4
     fig-dpi: 72
     tbl-cap-location: top
-    ## Code
     code-fold: false
     code-tools: true
     code-summary: "Show the code"
     code-line-numbers: true
     code-block-border-left: "#ccc"
     highlight-style: zenburn
-    ## Execution
     execute:
       echo: true
       cache: false
-    ## Rendering
     embed-resources: true
 crossref:
   fig-title: '**Figure**'
@@ -50,11 +49,15 @@ mathfont: LiberationMono
 monofont: DejaVu Sans Mono
 classoption: a4paper
 bibliography: ../resources/references.bib
+editor: 
+  markdown: 
+    wrap: 72
 ---
 
 ## Quarto
 
-Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+Quarto enables you to weave together content and executable code into a
+finished document. To learn more about Quarto see <https://quarto.org>.
 
 ## Running Code
 
@@ -97,7 +100,9 @@ source('helperFunctions.R')
 
 \# Read in the data
 
-Now we will move to the raw \`nhatrang_data.csv\` data. There are many functions in R that can read in a CSV file. We will use a the \`read_csv()\` function as it is part of the tidyverse ecosystem.
+Now we will move to the raw \`nhatrang_data.csv\` data. There are many
+functions in R that can read in a CSV file. We will use a the
+\`read_csv()\` function as it is part of the tidyverse ecosystem.
 
 ```{r}
 #| label: readData
@@ -140,7 +145,8 @@ dat |> datawizard::data_codebook() |> knitr::kable()
 
 \# Data preparation
 
-Before we can model these data, they need to be processed into a format compatible with statistical modelling. The necessary wrangling steps:
+Before we can model these data, they need to be processed into a format
+compatible with statistical modelling. The necessary wrangling steps:
 
 1.  exclude extraneous (unneeded) fields
 2.  exclude poor images
@@ -156,7 +162,9 @@ Before we can model these data, they need to be processed into a format compatib
 
 \## Exclude fields
 
-Although it is often harmless enough to retain the other fields, it does make reviewing the data more combersum, so at an early stage within this exercise, we will probably restrict the data to just the above fields.
+Although it is often harmless enough to retain the other fields, it does
+make reviewing the data more combersum, so at an early stage within this
+exercise, we will probably restrict the data to just the above fields.
 
 ```{r}
 #| label: selecting 
@@ -185,6 +193,7 @@ dat |> dim()
 ```
 
 ## Lengthen the data
+
 ```{r}
 #| label: pivot
 dat <-
@@ -196,24 +205,24 @@ dat <-
 dat |> as.data.frame() |> head()
 ```
 
-
 ## Joining to the group code lookup data
+
 Our primary interest in these data will be in exploring patterns in
 broad taxanomic groups such as *Hard coral* and *algae*. Since the
 machine learning tools behind ReefCloud are tuned to classify to finer
-taxonomic resolutions, next task will be to use a lookup table so as
-to assign the higher order group codes (HC and A) to the data.
+taxonomic resolutions, next task will be to use a lookup table so as to
+assign the higher order group codes (HC and A) to the data.
 
-
-:::: {.panel-tabset}
-
+::: panel-tabset
 ### glimpse
+
 ```{r}
 #| label: examineLabelset
 labelset |> glimpse() 
 ```
 
 ### head
+
 ```{r}
 #| label: examineLabelset1
 ## Explore the first 6 rows of the labelseta
@@ -221,18 +230,19 @@ labelset |> head()
 ```
 
 ### str
+
 ```{r}
 #| label: examineLabelset2
 labelset |> str() 
 ```
 
 ### Easystats (datawizard)
+
 ```{r}
 #| label: examineLabelset3
 labelset |> datawizard::data_codebook() |> knitr::kable() 
 ```
-
-::::
+:::
 
 ```{r}
 #| label: join
@@ -244,7 +254,6 @@ dat <-
     )
 dat |> as.data.frame() |> head() 
 ```
-
 
 ## Tally up points
 
@@ -281,15 +290,14 @@ dat |> as.data.frame() |> head()
 ## Fill in any gaps
 
 Since the data represent the classification of points in images, they
-only include what was present, not what was also absent. For example,
-if all five points are Algae, then this also means that all other
+only include what was present, not what was also absent. For example, if
+all five points are Algae, then this also means that all other
 functional groups are absent - yet this information is lacking in the
 data. For modelling purposes it is vital that we fill in all the zero
 values.
 
 To do so, we must create a data set that contains every GROUP in every
 IMAGE.
-
 
 ```{r}
 GROUPS <- dat |> pull(GROUP) |> unique()
@@ -328,7 +336,6 @@ dat |> as.data.frame() |> head()
 
 ## Sum to transect level
 
-
 ```{r}
 ## Now sum up to transect level
 dat <- 
@@ -342,7 +349,6 @@ dat <-
 dat |> as.data.frame() |> head() 
 ```
 
-
 ## Generate a year field
 
 ```{r}
@@ -354,7 +360,6 @@ dat <-
   ) 
 dat |> as.data.frame() |> head() 
 ```
-
 
 ## Declare all character vectors as categorical
 
@@ -372,9 +377,7 @@ dat <-
 dat |> as.data.frame() |> head() 
 ```
 
-
-::: {.panel-tabset}
-
+::: panel-tabset
 ```{r}
 #| label: EDA1
 #| fig.width: 8
@@ -386,7 +389,7 @@ dat |>
   geom_line(aes(group = transect_id)) + 
   scale_y_continuous("Hard coral cover (%)") +
   scale_colour_discrete("Survey depth (m)") +
-  scale_x_datetime("Year", date_breaks = "1 years", date_labels = "%Y") + 
+  scale_x_datetime("Year", date_breaks = "2 months", date_labels = "%b") + 
   facet_wrap(~site_name) +
   theme_classic()
 ```
@@ -405,11 +408,9 @@ cover <- dat |>
 cover
 ```
 
-
 I fully acknowledge this issue and therefore acknowledge that the
 analysis I will present is completely invalid.
 :::
-
 
 ```{r, mhiden=TRUE}
 #| label: hard coral
@@ -441,6 +442,7 @@ $$
 :::: {.panel-tabset}
 
 ### Define priors
+
 ```{r}
 dat_hc |>
   mutate(COVER = COUNT/TOTAL) |>
@@ -449,8 +451,6 @@ dat_hc |>
     mean(COVER),
     sd(COVER))
 ```
-
-
 
 ```{r}
 form <- bf(COUNT | trials(TOTAL) ~ fYear + (1|site_name) + (1|transect_id),
@@ -484,7 +484,6 @@ model1 |>
   _[[1]] +
   geom_point(data = dat_hc, aes(y = COUNT/TOTAL, x = fYear), inherit.aes = FALSE)
 ```
-
 
 ```{r}
 model1 <- update(model1, sample_prior = "yes")
@@ -526,7 +525,6 @@ model1 |> pp_check(type = 'dens_overlay', ndraws = 100)
 resids <- model1 |> make_brms_dharma_res(integerResponse = FALSE)
 ```
 
-
 ```{r}
 #| fig.width : 8
 #| fig.height : 8
@@ -536,7 +534,6 @@ wrap_elements(~testUniformity(resids)) +
   wrap_elements(~testDispersion(resids))
 
 ```
-
 
 ```{r}
 model1 |> conditional_effects()
@@ -586,6 +583,7 @@ model1 |>
   scale_y_continuous("Coral cover (%)", labels = scales::label_number(scale = 100)) +
   scale_x_discrete("Year")
 ```
+
 ```{r}
 g1 <-
   model1 |> 
@@ -602,10 +600,10 @@ g1 <-
 ggsave(g1, file = "nhatrang.png", dpi = 300, width = 8, height = 6.5)
 ```
 
-
-
 # Mapping Sites
+
 # df location
+
 ```{r}
 data_only_location_nt <- dat_hc |> 
   dplyr::select(
@@ -630,6 +628,7 @@ cities <- world.cities |> filter (country.etc =="Vietnam")
 ```
 
 # map Vietnam
+
 ```{r}
 bbox <- st_bbox(c(xmin = 109.0,ymin = 12.0, xmax =109.5,  ymax =12.5),
                 crs =4326)
@@ -667,7 +666,6 @@ map1 <-   ggplot() +
 map1 
 ```
 
-
 ```{r}
 map1 + inset_element(map_overlay, 
                      left = 0.5, 
@@ -676,16 +674,8 @@ map1 + inset_element(map_overlay,
                      bottom = 0.01)
 ```
 
-
-
 ```{r}
 mapsite <- map1 + map_overlay
 ggsave(mapsite, file = "../output/nhatrang_site.png", dpi = 300, width = 8, height = 6.5)
+mapsite
 ```
-
-
-
-
-
-
-
