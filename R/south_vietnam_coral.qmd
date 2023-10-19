@@ -1,0 +1,444 @@
+---
+title: "vietnam"
+author: "Quang Thai"
+date: today
+date-format: "DD/MM/YYYY"
+format: 
+  html:
+    ## Format
+    ## Table of contents
+    ## Numbering
+    ## Layout
+    ## Rendering
+    theme: spacelab
+    css: ../resources/ws_style.css
+    html-math-method: mathjax
+    toc: true
+    toc-float: true
+    number-sections: true
+    number-depth: 3
+    fig-caption-location: "bottom"
+    fig-align: "center"
+    ## Code
+    ## Execution
+    fig-width: 4
+    fig-height: 4
+    fig-dpi: 72
+    tbl-cap-location: top
+    code-fold: false
+    code-tools: true
+    code-summary: "Show the code"
+    code-line-numbers: true
+    code-block-border-left: "#ccc"
+    highlight-style: zenburn
+    execute:
+      echo: true
+      cache: false
+    embed-resources: true
+crossref:
+  fig-title: '**Figure**'
+  fig-labels: arabic
+  tbl-title: '**Table**'
+  tbl-labels: arabic
+engine: knitr
+output_dir: "docs"
+documentclass: article
+fontsize: 12pt
+mainfont: Arial
+mathfont: LiberationMono
+monofont: DejaVu Sans Mono
+classoption: a4paper
+bibliography: ../resources/references.bib
+editor: 
+  markdown: 
+    wrap: 72
+---
+
+## Quarto
+
+Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+
+## Running Code
+```{r}
+#| label: setup
+#| include: false
+
+knitr::opts_chunk$set(cache.lazy = FALSE,
+                      tidy = "styler")
+options(tinytex.engine = "xelatex")
+```
+\# Preparations
+
+Load the necessary libraries
+
+```{r}
+#| label: libraries
+#| output: false
+#| eval: true
+#| warning: false
+#| message: false
+#| cache: false
+
+library(tidyverse)
+library(easystats)
+library(knitr)
+library(sf)
+library(rnaturalearth)
+library(brms)
+library(rstan)
+library(tidybayes)
+library(patchwork)
+library(DHARMa)
+library(HDInterval)
+library(emmeans)
+library(maps)
+source('helperFunctions.R')
+```
+
+\# Read in the data
+```{r}
+#| label: readData
+dat1 <- read_csv("../data/2023_original_dataset_cover.csv", trim_ws = TRUE)
+
+```
+
+
+::: panel-tabset
+\## glimpse
+
+```{r}
+#| label: examinData
+dat1 |> glimpse() 
+```
+
+\## head
+
+```{r}
+#| label: examinData1
+## Explore the first 6 rows of the data
+dat1 |> head() 
+```
+
+\## str
+
+```{r}
+#| label: examinData2
+dat1 |> str() 
+```
+
+
+# Data preparation
+
+Before we can model these data, they need to be processed into a format
+compatible with statistical modelling. The necessary wrangling steps:
+
+1.  exclude extraneous (unneeded) fields
+2.  exclude poor images
+3.  lengthen the data with respect to classification type
+4.  join to a labelset lookup
+5.  tally up the points per date/image/GROUP/type
+6.  recode transect id
+7.  fill in the gaps and add the zeros
+8.  sum to transect level
+9.  generate a Year field from the sample date
+
+::: {.panel-tabset}
+
+\## Exclude fields
+
+Although it is often harmless enough to retain the other fields, it does
+make reviewing the data more combersum, so at an early stage within this
+exercise, we will probably restrict the data to just the above fields.
+
+```{r}
+#| label: selecting 
+
+dat1 <- dat1 |>
+  dplyr::select(site_location,
+                site_name_en,
+    survey_year,
+    transect,
+    survey_section,
+    point_section_survey,
+    group_reefcheck
+    )
+dat1 |> as.data.frame() |> head()
+```
+## Tally up points
+
+Count the number of points of each type as well as sum up the total
+number of points per image.
+
+```{r}
+#| label: count
+dat1 <- 
+  dat1 |> 
+  group_by(across(c(starts_with("site"),
+    starts_with("survey"),
+    transect,
+    group_reefcheck))
+  ) |>
+  summarise(COUNT = n(), .groups = "keep") |> 
+  ungroup(group_reefcheck) |>
+  mutate(TOTAL = sum(COUNT)) |>
+  ungroup() 
+dat1 |> as.data.frame() |> head() 
+```
+```{r}
+#| label: recode_transects
+dat1 <- 
+  dat1 |>
+  mutate(transect_id = paste0(site_name_en, transect, survey_section)) 
+dat1 |> as.data.frame() |> head() 
+```
+
+## Fill in any gaps
+
+Since the data represent the classification of points in images, they
+only include what was present, not what was also absent. For example, if
+all five points are Algae, then this also means that all other
+functional groups are absent - yet this information is lacking in the
+data. For modelling purposes it is vital that we fill in all the zero
+values.
+
+To do so, we must create a data set that contains every GROUP in every
+IMAGE.
+
+```{r}
+GROUPS <- dat1 |> pull(group_reefcheck) |> unique()
+data.filler <- dat1 %>%
+  dplyr::select(
+    starts_with("site"),
+    starts_with("survey"),
+    transect,
+    transect_id) |> 
+  distinct() |> 
+ tidyr::crossing(group_reefcheck = GROUPS) 
+
+dat1 <-
+  dat1 |> 
+  full_join(data.filler) |>
+  group_by(
+    across(c(
+      starts_with("site"),
+    starts_with("survey"),
+    transect,
+    transect_id
+    ))) |> 
+  mutate(COUNT = ifelse(is.na(COUNT), 0, COUNT),
+    TOTAL = max(TOTAL, na.rm = TRUE)
+  )
+dat1 |> as.data.frame() |> head() 
+```
+## Declare all character vectors as categorical
+
+We will also create a categorical version of year.
+
+```{r}
+#| label: declare factors
+dat1 <-
+  dat1 |>
+  mutate(across(where(is.character), ~factor(.))) 
+dat1 |> as.data.frame() |> head() 
+```
+
+# Exploratory data analysis
+```{r}
+#| label: EDA1
+#| fig.width: 8
+#| fig.height: 15
+dat1 |>
+  filter(group_reefcheck == "HC") |> 
+  ggplot(aes(y =  100*COUNT/TOTAL, x = transect)) +
+  geom_point() +
+  #geom_line(aes(x = as.numeric(transect), group = transect_id)) + 
+  scale_y_continuous("Hard coral cover (%)") +
+  #scale_colour_discrete("Survey depth (m)") +
+  #scale_x_datetime("Year", date_breaks = "2 months", date_labels = "%b") + 
+  facet_wrap(~site_location+site_name_en) +
+  theme_classic()
+```
+```{r}
+#| label: EDA1
+#| fig.width: 8
+#| fig.height: 4
+dat1 |>
+  filter(group_reefcheck == "HC") |> 
+  ggplot(aes(y =  100*COUNT/TOTAL, x = transect)) +
+  geom_boxplot() +
+  #geom_line(aes(x = as.numeric(transect), group = transect_id)) + 
+  scale_y_continuous("Hard coral cover (%)") +
+  #scale_colour_discrete("Survey depth (m)") +
+  #scale_x_datetime("Year", date_breaks = "2 months", date_labels = "%b") + 
+  facet_grid(~site_location) +
+  theme_classic()
+```
+
+```{r, mhiden=TRUE}
+#| label: hard coral
+dat_hc <- dat1 |>
+  filter(group_reefcheck == "HC") |>
+  droplevels()
+```
+
+```{r}
+dat_hc <- dat_hc |> 
+  mutate(Treatment = factor(paste0(site_location, transect)))
+```
+
+
+
+# Fit models
+
+:: {.panel-tabset}
+
+## Binomial model
+
+$$
+\begin{align}
+y_{i} &\sim{} Bin(\pi_{i}, n_{i})\\
+log\left(\frac{\pi_i}{1-\pi_i}\right) &= \beta_0 + \beta_{i}\mathbf{X}\\
+\beta_0 \sim{} N(0, 1)\\
+\beta_{1-3} \sim{} N(0, 1)\\
+\end{align}
+$$
+
+:::: {.panel-tabset}
+
+### Define priors
+
+```{r}
+dat_hc |>
+  mutate(COVER = COUNT/TOTAL) |>
+  group_by(Treatment) |>
+  summarise(
+    qlogis(mean(COVER)),
+    qlogis(sd(COVER)))
+```
+```{r}
+form <- bf(COUNT | trials(TOTAL) ~ Treatment+ (1|site_name_en) + (1|transect_id),
+           family = binomial(link = "logit"))
+```
+
+```{r}
+priors <- prior(normal(0, 2), class = "Intercept") +
+  prior(normal(0, 2), class = "b") +
+  prior(student_t(3, 0, 2), class = "sd")
+```
+
+```{r}
+model1 <- brm(form,
+data = dat_hc,
+prior = priors,
+sample_prior = "only",
+iter = 5000,
+warmup = 1000,
+chains = 3,
+cores = 3,
+thin = 5,
+refresh = 0,
+backend = "rstan")
+```
+```{r}
+model1 |>
+  conditional_effects() |>
+  plot(ask=FALSE) 
+```
+```{r}
+model1 <- update(model1, sample_prior = "yes")
+```
+```{r}
+model1 |>
+  conditional_effects() |>
+  plot(ask = FALSE) 
+```
+
+## Model MCMC checkinfg
+
+```{r}
+model1 |> SUYR_prior_and_posterior()
+```
+```{r}
+model1$fit |> stan_trace()
+```
+
+```{r}
+model1$fit |> stan_ac()
+```
+
+```{r}
+model1$fit |> stan_rhat()
+```
+
+
+```{r}
+model1$fit |> stan_ess()
+```
+```{r}
+model1 |> pp_check(type = 'dens_overlay', ndraws = 100)
+```
+```{r}
+resids <- model1 |> make_brms_dharma_res(integerResponse = FALSE)
+```
+
+```{r}
+#| fig.width : 8
+#| fig.height : 8
+wrap_elements(~testUniformity(resids)) +
+  wrap_elements(~plotResiduals(resids, form = factor(rep(1, nrow(dat_hc))))) +
+  wrap_elements(~plotResiduals(resids)) +
+  wrap_elements(~testDispersion(resids))
+
+```
+
+```{r}
+model1 |> 
+  as_draws_df() |> 
+  summarise_draws(median, HDInterval::hdi, rhat, length, ess_bulk, ess_tail) |>
+  knitr::kable()
+  
+```
+```{r}
+model1 |> 
+  emmeans(~Treatment) |> 
+  regrid() |> 
+  gather_emmeans_draws() |> 
+  summarise(median_hdci(.value), Pl = mean(.value <0), Pg = mean(.value >0)
+            )
+```
+```{r}
+cmat <- cbind(transect = c(0,0,-1/5, 1/5, -1/5, 1/5, 0, 0, -1/5, 1/5, -1/5, 1/5, 0, -1/5, 1/5))
+
+model1 |> 
+  emmeans(~Treatment) |> 
+  regrid() |> 
+  contrast(method = list(Treatment = cmat)) |> 
+  gather_emmeans_draws() |> 
+  summarise(median_hdci(.value), Pl = mean(.value <0), Pg = mean(.value >0)
+            )
+```
+
+```{r}
+cmat <- cbind(transect = c(0,0,-1/5, 1/5, -1/5, 1/5, 0, 0, -1/5, 1/5, -1/5, 1/5, 0, -1/5, 1/5))
+
+model1 |> 
+  emmeans(~Treatment) |> 
+  regrid() |> 
+  regrid(trans = "log") |> 
+  contrast(method = list(Treatment = cmat)) |> 
+  gather_emmeans_draws() |> 
+    mutate(.value = exp(.value)) |> 
+  summarise(median_hdci(.value), Pl = mean(.value <1), Pg = mean(.value >1)
+            )
+```
+
+
+
+```{r}
+model1 |> 
+  emmeans(~Treatment, type = "response") 
+  
+```
+
+::::
+:::
