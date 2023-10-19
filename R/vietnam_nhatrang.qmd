@@ -91,6 +91,7 @@ library(patchwork)
 library(DHARMa)
 library(HDInterval)
 library(emmeans)
+library(maps)
 source('helperFunctions.R')
 ```
 
@@ -394,8 +395,8 @@ dat |>
 
 ```{r}
 #| label: EDA2
-#| fig.width: 4
-#| fig.height: 4
+#| fig.width: 8
+#| fig.height: 8
 cover <- dat |>
   filter(type == "point_human_classification", GROUP == "HC") |> 
   ggplot(aes(y =  100*COUNT/TOTAL, x = fYear)) +
@@ -678,7 +679,7 @@ map1 + inset_element(map_overlay,
 
 
 ```{r}
-map1 + map_overlay + cover
+map1 + map_overlay
 ```
 
 
