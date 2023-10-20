@@ -100,6 +100,9 @@ source('helperFunctions.R')
 #| label: readData
 dat1 <- read_csv("../data/2023_original_dataset_cover.csv", trim_ws = TRUE)
 
+#| label: readData
+data <- read_csv("../data/2023_original_dataset_cover.csv", trim_ws = TRUE)
+
 ```
 
 
@@ -156,12 +159,12 @@ exercise, we will probably restrict the data to just the above fields.
 dat1 <- dat1 |>
   dplyr::select(site_location,
                 site_name_en,
-    survey_year,
-    transect,
-    survey_section,
-    point_section_survey,
-    group_reefcheck
-    )
+                survey_year,
+                transect,
+                survey_section,
+                point_section_survey,
+                group_reefcheck)
+
 dat1 |> as.data.frame() |> head()
 ```
 ## Tally up points
@@ -240,6 +243,10 @@ dat1 <-
   dat1 |>
   mutate(across(where(is.character), ~factor(.))) 
 dat1 |> as.data.frame() |> head() 
+```
+# Label in group_reefcheck
+```{r}
+summary(dat1$group_reefcheck)
 ```
 
 # Exploratory data analysis
@@ -407,7 +414,9 @@ model1 |>
             )
 ```
 ```{r}
-cmat <- cbind(transect = c(0,0,-1/5, 1/5, -1/5, 1/5, 0, 0, -1/5, 1/5, -1/5, 1/5, 0, -1/5, 1/5))
+cmat <- cbind(transect = c(0,0,-1/5, 1/5, -1/5, 1/5, 0, 0, -1/5, 1/5, -1/5, 1/5, 0, -1/5, 1/5),
+              "offshore vs coastal" = c(1/4, 1/4, -1/6, 0, -1/6, 0, 1/4, 1/4, -1/6, 0, -1/6, 0, -1/6, -1/6, 0),
+              "fringing vs submerged" = c(-1/4, 1/11, 1/11, 1/11, 1/11, 1/11, -1/4, -1/4, 1/11, 1/11, 1/11, 1/11, -1/4, 1/11, 1/11))
 
 model1 |> 
   emmeans(~Treatment) |> 
@@ -417,9 +426,79 @@ model1 |>
   summarise(median_hdci(.value), Pl = mean(.value <0), Pg = mean(.value >0)
             )
 ```
+Shallow vs deeo
+```{r}
+mat <- model1 |> 
+  as_draws_df() |> 
+  dplyr::select(starts_with("b_")) |> 
+  as.matrix()
+
+ccmat <- cbind("shallow" = c(1,0,0, 1/5, 0, 1/5, 0, 0, 0, 1/5, 0, 1/5, 0, 0, 1/5),
+               "deep" = c(1,0,1/5, 0, 1/5, 0, 0, 0, 1/5, 0, 1/5, 0, 0, 1/5, 0)
+)
+(mat %*% ccmat) |> plogis() |> 
+  as.data.frame() |> 
+  pivot_longer(cols = everything(),
+               names_to = "transect",
+               values_to = ".value") |> 
+  group_by(transect) |> 
+  median_hdci(.value) |> 
+  ggplot(aes(y=.value, x = transect)) +
+  geom_pointrange(aes(ymin = .lower, ymax = .upper)) +
+  theme_classic()
+ 
+```
+Offshore vs coastal
+```{r}
+mat <- model1 |> 
+  as_draws_df() |> 
+  dplyr::select(starts_with("b_")) |> 
+  as.matrix()
+
+ccmat <- cbind("offshore" = c(1, 1/4, 0, 0, 0, 0, 1/4, 1/4, 0, 0, 0, 0, 0, 0, 0),
+               "coastal" = c(1, 0, 1/6, 0, 1/6, 0, 0, 0, 1/6, 0, 1/6, 0, 1/6, 1/6, 0)
+)
+(mat %*% ccmat) |> plogis() |> 
+  as.data.frame() |> 
+  pivot_longer(cols = everything(),
+               names_to = "offshore vs coastal",
+               values_to = ".value") |> 
+  group_by(`offshore vs coastal`) |> 
+  median_hdci(.value) |> 
+  ggplot(aes(y=.value, x = `offshore vs coastal`)) +
+  geom_pointrange(aes(ymin = .lower, ymax = .upper)) +
+  theme_classic()
+ 
+```
+Fringing vs submerged
+```{r}
+mat <- model1 |> 
+  as_draws_df() |> 
+  dplyr::select(starts_with("b_")) |> 
+  as.matrix()
+
+ccmat <- cbind("fringing" = c(1, 1/11, 1/11, 1/11, 1/11, 1/11, 0, 0, 1/11, 1/11, 1/11, 1/11, 0, 1/11, 1/11),
+               "submerged" = c(1, 0, 0, 0, 0, 0, 1/4, 1/4, 0, 0, 0, 0, 1/4, 0, 0)
+)
+(mat %*% ccmat) |> plogis() |> 
+  as.data.frame() |> 
+  pivot_longer(cols = everything(),
+               names_to = "fringing vs submerged",
+               values_to = ".value") |> 
+  group_by(`fringing vs submerged`) |> 
+  median_hdci(.value) |> 
+  ggplot(aes(y=.value, x = `fringing vs submerged`)) +
+  geom_pointrange(aes(ymin = .lower, ymax = .upper)) +
+  theme_classic()
+ 
+```
+
+
 
 ```{r}
-cmat <- cbind(transect = c(0,0,-1/5, 1/5, -1/5, 1/5, 0, 0, -1/5, 1/5, -1/5, 1/5, 0, -1/5, 1/5))
+cmat <- cbind(transect = c(0,0,-1/5, 1/5, -1/5, 1/5, 0, 0, -1/5, 1/5, -1/5, 1/5, 0, -1/5, 1/5),
+              "offshore vs coastal" = c(1/4, 1/4, -1/6, 0, -1/6, 0, 1/4, 1/4, -1/6, 0, -1/6, 0, -1/6, -1/6, 0),
+              "fringing vs submerged" = c(-1/4, 1/11, 1/11, 1/11, 1/11, 1/11, -1/4, -1/4, 1/11, 1/11, 1/11, 1/11, -1/4, 1/11, 1/11))
 
 model1 |> 
   emmeans(~Treatment) |> 
@@ -433,12 +512,11 @@ model1 |>
 ```
 
 
-
+::::
 ```{r}
-model1 |> 
-  emmeans(~Treatment, type = "response") 
-  
+data |> head()
 ```
 
-::::
+
+
 :::
