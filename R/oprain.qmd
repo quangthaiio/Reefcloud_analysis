@@ -98,6 +98,266 @@ source('helperFunctions.R')
 \# Read in the data
 ```{r}
 #| label: readData
-dat <- read_csv("../data/oparin_data.csv", trim_ws = TRUE)
+dat2 <- read_csv("../data/oparin_data.csv", trim_ws = TRUE)
+
+```
+
+::: panel-tabset
+\## glimpse
+
+```{r}
+#| label: examinData
+dat2 |> glimpse() 
+```
+
+\## head
+
+```{r}
+#| label: examinData1
+## Explore the first 6 rows of the data
+dat2 |> head() 
+```
+
+
+\## str
+
+```{r}
+#| label: examinData2
+dat2 |> str() 
+```
+
+
+# Data preparation
+
+Before we can model these data, they need to be processed into a format
+compatible with statistical modelling. The necessary wrangling steps:
+
+1.  exclude extraneous (unneeded) fields
+2.  exclude poor images
+3.  lengthen the data with respect to classification type
+4.  join to a labelset lookup
+5.  tally up the points per date/image/GROUP/type
+6.  recode transect id
+7.  fill in the gaps and add the zeros
+8.  sum to transect level
+9.  generate a Year field from the sample date
+
+::: {.panel-tabset}
+
+\## Exclude fields
+
+Although it is often harmless enough to retain the other fields, it does
+make reviewing the data more combersum, so at an early stage within this
+exercise, we will probably restrict the data to just the above fields.
+
+```{r}
+#| label: selecting 
+
+dat2 <- dat2 |>
+  dplyr::select(Location,
+                Site,
+                Rep,
+                JV_HC,
+                JV_SC,
+                JV_TOTAL,
+                point_HC,
+                point_SC,
+                point_SW,
+                point_NIA,
+                point_HA,
+                point_CA,
+                point_TA,
+                point_total)
+dat2 |> as.data.frame() |> head()
+```
+
+# added MA = SW+NIA+HA, LC = HC+SC, AVAIL = TA+CA
+```{r}
+dat2<- 
+  dat2 |> 
+  group_by(Location,
+           Site,
+           Rep) |> 
+  mutate(
+    MA = point_NIA + point_SW + point_HA,
+    LC = point_HC + point_SC,
+    AVAIL = point_CA + point_TA) |>
+  mutate(transect_id = paste(Site, Rep, sep="_"))
+```
+
+# Juvenil & Location
+
+```{r}
+#| label: EDA1
+#| fig.width: 8
+#| fig.height: 4
+g1<-
+  dat2 |>
+  ggplot(aes(y = JV_TOTAL, x = Location)) +
+  geom_boxplot() +
+  scale_y_continuous("Number coral juvenile") +
+  theme_classic() +
+  scale_x_discrete(limits = c("Nha Trang", "Ninh Thuan", "Binh Thuan", "Nam Phu Quy", "Nam Binh Thuan", "Con Dao"))
+g1
+```
+
+
+```{r}
+#| label: EDA1
+#| fig.width: 8
+#| fig.height: 4
+g2<-
+  dat2 |>
+  ggplot(aes(y = JV_TOTAL, x = 100*MA/40)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  scale_y_continuous("Number of juvenile") +
+  theme_classic()
+  #scale_x_discrete(limits = c("Nha Trang", "Ninh Thuan", "Binh Thuan", "Nam Phu Quy", "Nam Binh Thuan", "Con Dao"))
+g2
+```
+
+```{r}
+#| label: EDA1
+#| fig.width: 8
+#| fig.height: 4
+g3<-
+  dat2 |>
+  ggplot(aes(y = JV_TOTAL, x = 100*LC/40)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  scale_y_continuous("Number of juvenile") +
+  theme_classic()
+  #scale_x_discrete(limits = c("Nha Trang", "Ninh Thuan", "Binh Thuan", "Nam Phu Quy", "Nam Binh Thuan", "Con Dao"))
+g3
+```
+
+```{r}
+#| label: EDA1
+#| fig.width: 8
+#| fig.height: 4
+g4<-
+  dat2 |>
+  ggplot(aes(y = JV_TOTAL, x = 100*point_HC/40)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  scale_y_continuous("Number of juvenile") +
+  theme_classic()
+  #scale_x_discrete(limits = c("Nha Trang", "Ninh Thuan", "Binh Thuan", "Nam Phu Quy", "Nam Binh Thuan", "Con Dao"))
+g4
+```
+
+```{r}
+#| label: EDA1
+#| fig.width: 8
+#| fig.height: 4
+g5<-
+  dat2 |>
+  ggplot(aes(y = JV_TOTAL, x = 100*point_SC/40)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  scale_y_continuous("Number of juvenile") +
+  theme_classic()
+  #scale_x_discrete(limits = c("Nha Trang", "Ninh Thuan", "Binh Thuan", "Nam Phu Quy", "Nam Binh Thuan", "Con Dao"))
+g5
+```
+
+
+```{r}
+g2+g3
+```
+
+```{r}
+g4+g5
+```
+```{r}
+form <- bf(JV_TOTAL ~ LC + (1|Location) + (1|Site) + (1|transect_id), family = poisson(link = "log"))
+```
+```{r}
+dat2 |> 
+  ungroup() |> 
+  summarise(log(mean(JV_TOTAL)), log(sd(JV_TOTAL)))
+
+dat2 |> 
+  ungroup() |> 
+  summarise(log(sd(JV_TOTAL)/sd(LC)))
+
+```
+
+```{r}
+priors <- prior(normal(2.3, 3), class = "Intercept") +
+  prior(normal(0, 3), class = "b") +
+  prior(student_t(3, 0, 1), class = "sd")
+```
+
+```{r}
+model1 <- brm(form,
+data = dat2,
+prior = priors,
+sample_prior = "only",
+iter = 15000,
+warmup = 5000,
+chains = 3,
+cores = 3,
+thin = 15,
+refresh = 0,
+backend = "rstan")
+```
+
+```{r}
+model1 |>
+  conditional_effects() |>
+  plot() |>
+  _[[1]] +
+  geom_point(data = dat2, aes(y = JV_TOTAL, x = LC), inherit.aes = FALSE) +
+  scale_y_log10()
+```
+
+```{r}
+model1a <- update(model1, sample_prior = "yes", control = list(adapt_delta = 0.99, max_treedepth = 20))
+```
+
+```{r}
+model1a |>
+  conditional_effects() |>
+  plot() |>
+  _[[1]] +
+  geom_point(data = dat2, aes(y = JV_TOTAL, x = LC), inherit.aes = FALSE)
+```
+```{r}
+model1 |> SUYR_prior_and_posterior()
+```
+
+```{r}
+model1$fit |> stan_trace()
+```
+
+```{r}
+model1$fit |> stan_ac()
+```
+
+```{r}
+model1$fit |> stan_rhat()
+```
+
+```{r}
+model1$fit |> stan_ess()
+```
+
+```{r}
+model1 |> pp_check(type = 'dens_overlay', ndraws = 100)
+```
+
+```{r}
+resids <- model1 |> make_brms_dharma_res(integerResponse = FALSE)
+```
+
+```{r}
+#| fig.width : 8
+#| fig.height : 8
+wrap_elements(~testUniformity(resids)) +
+  wrap_elements(~plotResiduals(resids, form = factor(rep(1, nrow(dat2))))) +
+  wrap_elements(~plotResiduals(resids)) +
+  wrap_elements(~testDispersion(resids))
 
 ```
