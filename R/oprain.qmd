@@ -1,7 +1,57 @@
 ---
-title: "oparin"
-format: html
-editor: visual
+title: "vietnam"
+author: "Quang Thai"
+date: today
+date-format: "DD/MM/YYYY"
+format: 
+  html:
+    ## Format
+    ## Table of contents
+    ## Numbering
+    ## Layout
+    ## Rendering
+    theme: spacelab
+    css: ../resources/ws_style.css
+    html-math-method: mathjax
+    toc: true
+    toc-float: true
+    number-sections: true
+    number-depth: 3
+    fig-caption-location: "bottom"
+    fig-align: "center"
+    ## Code
+    ## Execution
+    fig-width: 4
+    fig-height: 4
+    fig-dpi: 72
+    tbl-cap-location: top
+    code-fold: false
+    code-tools: true
+    code-summary: "Show the code"
+    code-line-numbers: true
+    code-block-border-left: "#ccc"
+    highlight-style: zenburn
+    execute:
+      echo: true
+      cache: false
+    embed-resources: true
+crossref:
+  fig-title: '**Figure**'
+  fig-labels: arabic
+  tbl-title: '**Table**'
+  tbl-labels: arabic
+engine: knitr
+output_dir: "docs"
+documentclass: article
+fontsize: 12pt
+mainfont: Arial
+mathfont: LiberationMono
+monofont: DejaVu Sans Mono
+classoption: a4paper
+bibliography: ../resources/references.bib
+editor: 
+  markdown: 
+    wrap: 72
 ---
 
 ## Quarto
@@ -9,18 +59,45 @@ editor: visual
 Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
 
 ## Running Code
+```{r}
+#| label: setup
+#| include: false
 
-When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+knitr::opts_chunk$set(cache.lazy = FALSE,
+                      tidy = "styler")
+options(tinytex.engine = "xelatex")
+```
+\# Preparations
+
+Load the necessary libraries
 
 ```{r}
-1 + 1
+#| label: libraries
+#| output: false
+#| eval: true
+#| warning: false
+#| message: false
+#| cache: false
+
+library(tidyverse)
+library(easystats)
+library(knitr)
+library(sf)
+library(rnaturalearth)
+library(brms)
+library(rstan)
+library(tidybayes)
+library(patchwork)
+library(DHARMa)
+library(HDInterval)
+library(emmeans)
+library(maps)
+source('helperFunctions.R')
 ```
 
-You can add options to executable code like this
-
+\# Read in the data
 ```{r}
-#| echo: false
-2 * 2
-```
+#| label: readData
+dat <- read_csv("../data/oparin_data.csv", trim_ws = TRUE)
 
-The `echo: false` option disables the printing of code (only output is displayed).
+```
